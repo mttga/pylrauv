@@ -1,0 +1,10 @@
+# https://github.com/osrf/lrauv/wiki/Message-definitions#lrauvinit
+std_msgs/Header header
+string id
+float64 init_lat
+float64 init_lon
+float64 init_z
+float32 init_pitch
+float32 init_roll
+float32 init_heading
+uint32  acomms_address
