@@ -1,11 +1,11 @@
 import rclpy
-from controllers import LrauvAgentController
+from controllers import LrauvEntityController, LrauvAgentController
 from launcher import RosLrauvLauncher
 from utils.spawner import LrauvSpawner
 from utils.world_controller import WorldController
 
 # TODO:
-# implement range bearing requests and responses
+# implement a proper ACT method
 # implement linear, static and linear with change of direction movement
 # enable parallelization of environments
 
@@ -39,36 +39,55 @@ class LrauvEnv:
         # spawn the entities
         self.spawner = LrauvSpawner()
         for name in self.entities_ids:
-            self.spawner.spawn(name)
+            self.spawner.spawn(name=name)
         self.nodes.append(self.spawner) # take trace of all the nodes
         self.spawner.check_all_spawned(self.entities_ids) # this only checks that exists at least one gazebo topic for each entity
 
-        # prepare controllers
-        self.controllers = {}
-        for name in self.entities_ids:
-            self.controllers[name] = LrauvAgentController(name)
-            self.nodes.append(self.controllers[name])
+        # prepare entity controllers
+        self.entities = {}
+        for i, name in enumerate(self.entities_ids):
+            if 'agent' in name:
+                self.entities[name] = LrauvAgentController(name=name, comm_adress=i+1, entities_names=self.entities_ids) 
+            else:
+                self.entities[name] = LrauvEntityController(name=name, comm_adress=i+1)
+            self.nodes.append(self.entities[name])
+        self.agents    = {name:self.entities[name] for name in self.agents_ids}
+        self.landmarks = {name:self.entities[name] for name in self.landmarks_ids}
 
-        self.world_controller.step_world(step_time=1) # step initially for one sec
-        states = {i:c.get_state() for i,c in self.controllers.items()}
-        
+        # send the initial range requests and step initially for a couple of secs
+        self.world_controller.step_world(step_time=1)
+        for _, agent in self.agents.items():
+            agent.send_range_requests()
+        self.world_controller.step_world(step_time=1) 
         self.started = True
-        return states
+        obs = {i:c.get_obs() for i,c in self.agents.items()}   
+        states = {i:c.get_state() for i,c in self.entities.items()}        
+
+        return obs, states
 
     def reset(self):
         if self.started:
             self.close()
         return self.start()
     
-    def step(self, actions=None, step_time:int=30):
+    def step(self, actions=None, step_time:int=60, comm_time:int=2):
         
-        for i, c in self.controllers.items():
+        for i, c in self.entities.items():
             c.send_command()
 
-        self.world_controller.step_world(step_time)
+        # step the world but leave a final room for sending the communciactions between robots
+        self.world_controller.step_world(step_time-comm_time)
 
-        states = {i:c.get_state() for i,c in self.controllers.items()}
-        return states
+        # send range requests
+        for name, agent in self.agents.items():
+            agent.send_range_requests()
+
+        # step the world additionally to allow for range responses to get back
+        self.world_controller.step_world(comm_time)
+
+        obs = {i:c.get_obs() for i,c in self.agents.items()}   
+        states = {i:c.get_state() for i,c in self.entities.items()}
+        return obs, states
 
     def close(self):
         for node in self.nodes:

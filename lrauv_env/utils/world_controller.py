@@ -25,7 +25,7 @@ class WorldController(Node):
 
         # wait for recieving at least the initiali simulation time
         while self.simulation_time is None:
-            rclpy.spin_once(self, timeout_sec=0.05)
+            rclpy.spin_once(self, timeout_sec=0.005)
 
     def step_world(self, step_time:int=60):
 

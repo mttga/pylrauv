@@ -62,11 +62,11 @@ def launch_setup(context, *args, **kwargs):
             for i in range(1, int(n_landmarks)+1)
         ]+[
             # agents RANGE RESPONSE, Ros -> Gazebo
-            f'/agent_{i}/range_bearing/responses@lrauv_msgs/msg/LRAUVRangeBearingResponse]lrauv_gazebo_plugins.msgs.LRAUVRangeBearingResponse'
+            f'/agent_{i}/range_bearing/responses@lrauv_msgs/msg/LRAUVRangeBearingResponse[lrauv_gazebo_plugins.msgs.LRAUVRangeBearingResponse'
             for i in range(1, int(n_agents)+1)
         ]+[
             # landmarks RANGE RESPONSE, Ros -> Gazebo
-            f'/landmark_{i}/range_bearing/responses@lrauv_msgs/msg/LRAUVRangeBearingResponse]lrauv_gazebo_plugins.msgs.LRAUVRangeBearingResponse'
+            f'/landmark_{i}/range_bearing/responses@lrauv_msgs/msg/LRAUVRangeBearingResponse[lrauv_gazebo_plugins.msgs.LRAUVRangeBearingResponse'
             for i in range(1, int(n_landmarks)+1)
         ]+[
             # lrauv init, ROS -> Gazebo 
