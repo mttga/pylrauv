@@ -2,20 +2,16 @@ import rclpy
 from rclpy.node import Node
 from lrauv_msgs.msg import LRAUVState, LRAUVCommand
 from std_msgs.msg import Header
-import random
+from .action_controllers import LinearController
+from typing import Union
 
 class LrauvEntityController(Node):
-
-    # static variables
-    prop_min = -31.4
-    prop_max = 31.4
-    rudder_min = -0.261799
-    rudder_max = 0.261799
 
     def __init__(
         self,
         name:str='agent_1',
         comm_adress:int=1,
+        action_controller:Union[LinearController,None]=None
     ):
         super().__init__(f'lrauv_{name}_controller')
         self.is_agent = 'agent' in name
@@ -32,6 +28,10 @@ class LrauvEntityController(Node):
         self.command_pub = self.create_publisher(LRAUVCommand, f"{name}/command_topic", 10)
         # communication adress
         self.comm_adress = comm_adress
+        # action controller
+        self.action_controller = action_controller
+        if action_controller is None:
+            self.action_controller = LinearController() # linear controller by default
 
     def _state_callback(self, msg):
         self.state = {
@@ -50,9 +50,14 @@ class LrauvEntityController(Node):
         self.state = None
         return state
     
-    def send_command(self, prop_action=None, rudder_action=None):
-        if prop_action is None and rudder_action is None:
-            prop_action, rudder_action = self.get_random_action()
+    def send_action(self, action=None):
+        if action is None:
+            prop_action, rudder_action = self.action_controller.sample_action()
+        else:
+            prop_action, rudder_action = self.action_controller.process_action(action)
+        self._send_command(prop_action, rudder_action)
+    
+    def _send_command(self, prop_action:float, rudder_action:float):
         msg = LRAUVCommand()
         msg.header = Header()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -60,8 +65,3 @@ class LrauvEntityController(Node):
         msg.rudder_angle_action = rudder_action
         self.command_pub.publish(msg)
         rclpy.spin_once(self, timeout_sec=0.0001)
-
-    def get_random_action(self):
-        prop_action = random.uniform(0., 20.)
-        rudder_action = random.uniform(-0.1, 0.1)
-        return prop_action, rudder_action

@@ -1,7 +1,8 @@
 import rclpy
 from lrauv_msgs.msg import LRAUVRangeBearingRequest, LRAUVRangeBearingResponse
 from .entity import LrauvEntityController
-from typing import List
+from .action_controllers import LinearController
+from typing import List, Union
 import math
 
 class LrauvAgentController(LrauvEntityController):
@@ -10,11 +11,12 @@ class LrauvAgentController(LrauvEntityController):
         self,
         name:str='agent_1',
         comm_adress:int=1,
+        action_controller:Union[LinearController,None]=None,
         entities_names:List[str]=['agent_1','landmark_1'],
         range_for_landmarks:bool=True,
     ):
 
-        super().__init__(name, comm_adress)
+        super().__init__(name, comm_adress, action_controller)
 
         # agents in respect of normal entities (landmarks) can comunicate (send and recieve range bearing requests/responses)
         self.comm_adress = comm_adress

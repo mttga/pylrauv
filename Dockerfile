@@ -84,3 +84,6 @@ RUN echo "source ~/gz_ws/install/setup.sh" >> /home/developer/.bashrc && \
     echo "source ~/lrauv_ws/install/setup.sh" >> /home/developer/.bashrc && \
     echo "source ~/ros2_rolling/install/setup.sh" >> /home/developer/.bashrc && \
     echo "source ~/ros_lrauv/install/setup.sh" >> /home/developer/.bashrc
+
+# STEP 3: additional python packages
+RUN python3 -m pip install -U pyproj

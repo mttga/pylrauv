@@ -15,12 +15,36 @@ def check_relative_distances(agents_data, error_margin=0.5):
             if diff > error_margin:
                 error_msg = f"Distance mismatch between {agent_i_key} and {agent_j_key}: {agent_i_to_j_dx} vs {agent_j_to_i_dx}. Difference: {diff}"
                 raise ArithmeticError(error_msg)
+            
+def check_init_positions(state, min_distance=20, max_distance_from_agent=100):
+    positions = np.array([[v['x'], v['y'], v['z']] for v in state.values()])
+    agent_indices = [i for i, k in enumerate(state.keys()) if 'agent' in k]
+
+    distances = np.sqrt(np.sum((positions[:, np.newaxis] - positions) ** 2, axis=2))
+    np.fill_diagonal(distances, np.inf)  # set the diagonal to infinity to ignore self-distances
+
+    # Check if every vehicle is more far away than the minimum distance threshold
+    if np.any(distances < min_distance):
+        i, j = np.where(distances < min_distance)
+        raise ValueError(f"{list(state.keys())[i[0]]} is too close to {list(state.keys())[j[0]]}: {distances[i[0], j[0]]} < {min_distance}")
+
+    # Check if every agent is not too far from any other vehicle
+    np.fill_diagonal(distances, 0.)
+    agent_distances = distances[agent_indices, :]
+    if np.any(agent_distances > max_distance_from_agent):
+        i, j = np.where(agent_distances > max_distance_from_agent)
+        raise ValueError(f"Agent {list(state.keys())[agent_indices[i[0]]]} is too far from {list(state.keys())[j[0]]}: {agent_distances[i[0], j[0]]} > {max_distance_from_agent}")
+
+    # Calculate the average distance between any vehicle and the agents
+    avg_agent_distance = np.mean(agent_distances)
+
+    return avg_agent_distance
 
 def test_step():
 
-    steps = 5
-    step_time = 30
-    env = LrauvEnv(n_agents=3, n_landmarks=3, use_gui=True)
+    steps = 20
+    step_time = 20
+    env = LrauvEnv(n_agents=3, n_landmarks=3, render=True, prop_range_agent=(5., 5.), prop_range_landmark=(5., 5.))
     t0 = time.time()
     
     state = env.reset()
@@ -55,17 +79,24 @@ def test_init():
     # initialize the environment with reset several times and prints the average time for inizialization
     times = []
     n_exp = 5
-    env = LrauvEnv(n_agents=3, n_landmarks=3, use_gui=True)
+    min_distance = 20
+    max_distance = 100
+    env = LrauvEnv(n_agents=3, n_landmarks=3, render=True, min_distance=min_distance, max_distance=max_distance)
+    avg_distances = []
     for _ in  range(n_exp):
         t0 = time.time()
         obs, state = env.reset()
         init_time = time.time()-t0
         times.append(init_time)
+        avg_distances.append(check_init_positions(state, min_distance, max_distance_from_agent=max_distance))
         print('Initial obs:', obs)
         print('Initial state:', state)
         print(f'Time for completing initialization: {init_time:.2f}')
+
     env.close()
     print(f'Average time for initialization: {np.mean(times):.2f}')
+    print(f'Average distance between agents and any other entity: {np.mean(avg_distances):.2f}')
+    print("Test passed")
 
 if __name__=='__main__':
     test_step()
