@@ -67,6 +67,7 @@
 #include "lrauv_gazebo_plugins/lrauv_command.pb.h"
 #include "lrauv_gazebo_plugins/lrauv_range_bearing_request.pb.h"
 #include "lrauv_gazebo_plugins/lrauv_range_bearing_response.pb.h"
+#include "lrauv_gazebo_plugins/lrauv_acoustic_message.pb.h"
 
 #include <memory>
 

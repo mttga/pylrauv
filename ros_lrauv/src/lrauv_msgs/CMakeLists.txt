@@ -18,6 +18,7 @@ set(msg_files
   "msg/LRAUVCommand.msg"
   "msg/LRAUVRangeBearingRequest.msg"
   "msg/LRAUVRangeBearingResponse.msg"
+  "msg/LRAUVAcousticMessage.msg"
 )
 
 # generate the messages

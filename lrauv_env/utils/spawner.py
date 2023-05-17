@@ -51,7 +51,7 @@ class LrauvSpawner(Node):
         init_msg.acomms_address = self.entities_spawned + 1
 
         self.pub.publish(init_msg)
-        rclpy.spin_once(self, timeout_sec=0.001)
+        rclpy.spin_once(self, timeout_sec=0.0001)
 
         self.entities_spawned += 1
 

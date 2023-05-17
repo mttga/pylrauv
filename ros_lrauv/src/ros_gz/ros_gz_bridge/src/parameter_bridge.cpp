@@ -93,13 +93,24 @@ int main(int argc, char * argv[])
     std::string arg = filteredArg;
     auto delimPos = arg.find(delim);
     if (delimPos == std::string::npos || delimPos == 0) {
-      usage();
-      return -1;
+        usage();
+        return -1;
     }
 
     BridgeConfig config;
-    config.ros_topic_name = arg.substr(0, delimPos);
-    config.gz_topic_name = arg.substr(0, delimPos);
+
+    // Try to find the # delimiter, which indicates separate ros and gz topic names.
+    auto hashPos = arg.find("#");
+    if (hashPos == std::string::npos) {
+        // If no # delimiter is found, use the same topic name for ros and gz.
+        config.ros_topic_name = arg.substr(0, delimPos);
+        config.gz_topic_name = arg.substr(0, delimPos);
+    } else {
+        // If # delimiter is found, split the ros and gz topic names.
+        config.ros_topic_name = arg.substr(0, hashPos);
+        config.gz_topic_name = arg.substr(hashPos + 1, delimPos - hashPos - 1);
+    }
+    
     arg.erase(0, delimPos + delim.size());
 
     // Get the direction delimeter, which should be one of:

@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from lrauv_msgs.msg import LRAUVState, LRAUVCommand
 from std_msgs.msg import Header
-from .action_controllers import LinearController
+from .action import LinearController
 from typing import Union
 
 class LrauvEntityController(Node):
@@ -20,12 +20,12 @@ class LrauvEntityController(Node):
         self.state = None
         self.state_sub = self.create_subscription(
             LRAUVState,
-            f"{name}/state_topic",
+            f"/{name}/state_topic",
             self._state_callback,
             10
         )
         # controller publisher
-        self.command_pub = self.create_publisher(LRAUVCommand, f"{name}/command_topic", 10)
+        self.command_pub = self.create_publisher(LRAUVCommand, f"/{name}/command_topic", 10)
         # communication adress
         self.comm_adress = comm_adress
         # action controller
@@ -63,5 +63,7 @@ class LrauvEntityController(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.prop_omega_action = prop_action
         msg.rudder_angle_action = rudder_action
+        msg.buoyancy_action = 0.0005 if 'landmark' in self.name else 0.
+        msg.drop_weight = True if 'landmark' in self.name else False
         self.command_pub.publish(msg)
         rclpy.spin_once(self, timeout_sec=0.0001)

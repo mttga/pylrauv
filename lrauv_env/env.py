@@ -1,9 +1,10 @@
 import rclpy
-from controllers import LrauvEntityController, LrauvAgentController
-from controllers.action_controllers import LinearController
-from launcher import RosLrauvLauncher
+from controllers import LrauvEntityController, LrauvAgentController, LrauvTeamController
+from controllers.action import LinearController
+from launcher.launcher import RosLrauvLauncher
 from utils.spawner import LrauvSpawner
 from utils.world_controller import WorldController
+from utils.path_visualizer import LrauvPathVisualizer
 from typing import Tuple
 
 # TODO:
@@ -25,7 +26,7 @@ class LrauvEnv:
         landmark_action_controller:str='linear', # defines how the landmarks will move
         prop_range_agent:Tuple[float, float]=(25., 25.), # defines the speed range for agent
         prop_range_landmark:Tuple[float, float]=(0, 20.), # defines the speed range for landmark
-        rudder_range_landmark:Tuple[float, float]=(-0.25, 0.25), # defines the angle of movement change for landmarks
+        rudder_range_landmark:Tuple[float, float]=(0.10, 0.25), # defines the angle of movement change for landmarks
     ):
         self.n_agents      = n_agents
         self.n_landmarks   = n_landmarks
@@ -88,14 +89,26 @@ class LrauvEnv:
         self.agents    = {name:self.entities[name] for name in self.agents_ids}
         self.landmarks = {name:self.entities[name] for name in self.landmarks_ids}
 
-        # send the initial range requests and step initially for a couple of secs
+        # use the team controller to facilitate the menagement of the agents
+        self.team = LrauvTeamController(self.agents, self.world_controller)
+
+        # add also the path visualizaer if render mode
+        if self.render:
+            self.visualizer = LrauvPathVisualizer(self.entities_ids)
+            self.nodes.append(self.visualizer)
+
+        # start for initial communication
         self.world_controller.step_world(step_time=1)
-        for _, agent in self.agents.items():
-            agent.send_range_requests()
-        self.world_controller.step_world(step_time=1) 
         self.started = True
-        obs = {i:c.get_obs() for i,c in self.agents.items()}   
-        states = {i:c.get_state() for i,c in self.entities.items()}        
+
+        # these functions should be always called in this order: range_request -> get_state -> communicate -> get_obs
+        self.team.send_range_requests()
+        states = {i:c.get_state() for i,c in self.entities.items()}
+        self.team.communicate()
+        obs = self.team.get_obs()
+
+        if self.render:
+            self.visualizer.update()        
 
         return obs, states
 
@@ -108,20 +121,20 @@ class LrauvEnv:
         
         # send actions
         for e in self.entities.values():
-            e.send_action()
+            e.send_action(actions)
 
         # step the world but leave a final room for sending the communciactions between robots
         self.world_controller.step_world(step_time-comm_time)
 
-        # send range requests
-        for agent in self.agents.values():
-            agent.send_range_requests()
-
-        # step the world additionally to allow for range responses to get back
-        self.world_controller.step_world(comm_time)
-
-        obs = {i:c.get_obs() for i,c in self.agents.items()}   
+        # comunicate and get the state and observations
+        self.team.send_range_requests(comm_time/2)
         states = {i:c.get_state() for i,c in self.entities.items()}
+        self.team.communicate(comm_time/2)
+        obs = self.team.get_obs()
+
+        # spin the visualizer if render mode
+        if self.render:
+            self.visualizer.update()
         return obs, states
 
     def close(self):

@@ -123,6 +123,7 @@ convert_ros_to_gz(
   convert_ros_to_gz(ros_msg.header, (*gz_msg.mutable_header()));
   gz_msg.set_propomegaaction_(ros_msg.prop_omega_action);
   gz_msg.set_rudderangleaction_(ros_msg.rudder_angle_action);
+  gz_msg.set_dropweightstate_(ros_msg.drop_weight);
   gz_msg.set_elevatorangleaction_(ros_msg.elevator_angle_action);
   gz_msg.set_masspositionaction_(ros_msg.mass_position_action);
   gz_msg.set_buoyancyaction_(ros_msg.buoyancy_action);
@@ -138,6 +139,7 @@ convert_gz_to_ros(
   ros_msg.prop_omega_action = gz_msg.propomegaaction_();
   ros_msg.rudder_angle_action = gz_msg.rudderangleaction_();
   ros_msg.elevator_angle_action = gz_msg.elevatorangleaction_();
+  ros_msg.drop_weight = gz_msg.dropweightstate_();
   ros_msg.mass_position_action = gz_msg.masspositionaction_();
   ros_msg.buoyancy_action = gz_msg.buoyancyaction_();
 }
@@ -186,6 +188,31 @@ convert_gz_to_ros(
   ros_msg.req_id = gz_msg.req_id();
   convert_gz_to_ros(gz_msg.bearing(), ros_msg.bearing);
   ros_msg.range = gz_msg.range();
+}
+
+// LRAUVAcousticMessage
+template<>
+void
+convert_ros_to_gz(
+  const lrauv_msgs::msg::LRAUVAcousticMessage & ros_msg,
+  lrauv_gazebo_plugins::msgs::LRAUVAcousticMessage & gz_msg)
+{
+  gz_msg.set_to(ros_msg.to);
+  gz_msg.set_from(ros_msg.sender);
+  // only strings are allowed to be sent in this wrapper from ros to gazebo
+  gz_msg.set_type(lrauv_gazebo_plugins::msgs::LRAUVAcousticMessage::MessageType::LRAUVAcousticMessage_MessageType_Other);
+  gz_msg.set_data(ros_msg.data);
+}
+
+template<>
+void
+convert_gz_to_ros(
+  const lrauv_gazebo_plugins::msgs::LRAUVAcousticMessage & gz_msg,
+  lrauv_msgs::msg::LRAUVAcousticMessage & ros_msg)
+{
+  ros_msg.to   = gz_msg.to();
+  ros_msg.sender = gz_msg.from();
+  ros_msg.data = gz_msg.data();
 }
 
 }  // namespace ros_gz_bridge

@@ -76,6 +76,7 @@
 #include <lrauv_msgs/msg/lrauv_command.hpp>
 #include <lrauv_msgs/msg/lrauv_range_bearing_request.hpp>
 #include <lrauv_msgs/msg/lrauv_range_bearing_response.hpp>
+#include <lrauv_msgs/msg/lrauv_acoustic_message.hpp>
 
 namespace ros_gz_bridge
 {

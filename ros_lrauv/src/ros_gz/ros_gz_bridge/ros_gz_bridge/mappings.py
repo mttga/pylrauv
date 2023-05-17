@@ -105,5 +105,6 @@ MAPPINGS = {
         Mapping('LRAUVCommand', 'LRAUVCommand'),
         Mapping('LRAUVRangeBearingRequest', 'LRAUVRangeBearingRequest'),
         Mapping('LRAUVRangeBearingResponse', 'LRAUVRangeBearingResponse'),
+        Mapping('LRAUVAcousticMessage', 'LRAUVAcousticMessage'),
     ],
 }

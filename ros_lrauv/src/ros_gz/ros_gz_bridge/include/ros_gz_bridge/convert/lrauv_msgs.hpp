@@ -7,6 +7,7 @@
 #include "lrauv_gazebo_plugins/lrauv_command.pb.h"
 #include "lrauv_gazebo_plugins/lrauv_range_bearing_request.pb.h"
 #include "lrauv_gazebo_plugins/lrauv_range_bearing_response.pb.h"
+#include "lrauv_gazebo_plugins/lrauv_acoustic_message.pb.h"
 
 // ROS 2 messages
 #include <lrauv_msgs/msg/lrauv_init.hpp>
@@ -14,6 +15,7 @@
 #include <lrauv_msgs/msg/lrauv_command.hpp>
 #include <lrauv_msgs/msg/lrauv_range_bearing_request.hpp>
 #include <lrauv_msgs/msg/lrauv_range_bearing_response.hpp>
+#include <lrauv_msgs/msg/lrauv_acoustic_message.hpp>
 
 #include <ros_gz_bridge/convert_decl.hpp>
 
@@ -88,6 +90,20 @@ void
 convert_gz_to_ros(
   const lrauv_gazebo_plugins::msgs::LRAUVRangeBearingResponse & gz_msg,
   lrauv_msgs::msg::LRAUVRangeBearingResponse & ros_msg);
+
+
+// LRAUVAcousticMessage
+template<>
+void
+convert_ros_to_gz(
+  const lrauv_msgs::msg::LRAUVAcousticMessage & ros_msg,
+  lrauv_gazebo_plugins::msgs::LRAUVAcousticMessage & gz_msg);
+
+template<>
+void
+convert_gz_to_ros(
+  const lrauv_gazebo_plugins::msgs::LRAUVAcousticMessage & gz_msg,
+  lrauv_msgs::msg::LRAUVAcousticMessage & ros_msg);
 
 }
 
