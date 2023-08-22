@@ -149,21 +149,21 @@ def modify_rviz_config(n_agents, n_landmarks):
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
-      Color: 25; 255; 0
+      Color: 92; 255; 92
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
       Line Style: Lines
-      Line Width: 0.029999999329447746
+      Line Width: 0.5
       Name: Path
       Offset:
         X: 0
         Y: 0
         Z: 0
-      Pose Color: 255; 85; 255
+      Pose Color: 92; 255; 92
       Pose Style: None
-      Radius: 0.029999999329447746
+      Radius: 0.5
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
       Topic:
@@ -180,21 +180,21 @@ def modify_rviz_config(n_agents, n_landmarks):
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
-      Color: 255; 0; 127
+      Color: 0; 128; 255
       Enabled: true
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.30000001192092896
       Line Style: Lines
-      Line Width: 0.029999999329447746
+      Line Width: 0.5
       Name: Path
       Offset:
         X: 0
         Y: 0
         Z: 0
-      Pose Color: 255; 85; 255
+      Pose Color: 0; 128; 255
       Pose Style: None
-      Radius: 0.029999999329447746
+      Radius: 0.5
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
       Topic:
@@ -204,6 +204,34 @@ def modify_rviz_config(n_agents, n_landmarks):
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /landmark_{landmark_id}/path
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 255; 90; 90
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.5
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 90; 90
+      Pose Style: None
+      Radius: 0.5
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /landmark_{landmark_id}_tracking/path
       Value: true
     '''
     

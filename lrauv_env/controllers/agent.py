@@ -7,7 +7,9 @@ from .action import LinearController
 from typing import List, Union
 import time
 import json
+import re
 from utils.conversions import bearing_to_r_el_az
+from tracking import Tracker
 
 
 class LrauvAgentController(LrauvEntityController):
@@ -18,12 +20,15 @@ class LrauvAgentController(LrauvEntityController):
         comm_adress:int=1,
         action_controller:Union[LinearController,None]=None,
         entities_names:List[str]=['agent_1','landmark_1'],
+        **tracker_args
     ):
 
         super().__init__(name, comm_adress, action_controller)
 
         # agents in respect of normal entities (landmarks) can comunicate (send and recieve range bearing requests/responses)
         self.comm_adress = comm_adress
+        self.agents_names    = [n for n in entities_names if 'agent' in n]
+        self.landmarks_names = [n for n in entities_names if 'landmark' in n]
         self.others  = {name:i+1 for i, name in enumerate(entities_names) if name!=self.name} # agent_1:1, landmark_1:3 etc.
         self.others_adr  = {i+1:name for i, name in enumerate(entities_names) if name!=self.name}
 
@@ -51,16 +56,20 @@ class LrauvAgentController(LrauvEntityController):
         )
         self._reset_comms()
 
+        # tracking: each agent uses a separate tracker for every landmark
+        self.trackers = [Tracker(**tracker_args) for n in entities_names if 'landmark' in n]
+
     def get_state(self):
         if self.current_state is None:
             self.current_state = super().get_state()
         return self.current_state
 
-    def get_obs(self):
+    def get_obs(self, dt:int=60):
         state = self.get_state()
         comms = self.collect_comms()
+        tracks = self.update_tracking(dt=dt)
         self._reset_comms()
-        return {**state, **comms}
+        return {**state, **comms, **tracks}
 
     def send_range_requests(self):
         self.requests_ids = {} # re-init the requests ids
@@ -127,15 +136,16 @@ class LrauvAgentController(LrauvEntityController):
         self.broadcast_to_agents(message)
         return message
 
+
     def _comm_callback(self, msg):
         if msg.header.frame_id == "LRAUVAcousticMessage":
             sender = self.others_adr[int(msg.src_address)]
-            # data could be corruputed, therefore try
+            # data could be corrupted, therefore try
             try:
                 data = bytes(list(msg.data)).decode('utf8')
                 self.comms[sender] = json.loads(data)
             except:
-                self.get_logger().warning(f'{self.name} got corrputed communication from {sender}, message: {msg}')
+                self.get_logger().warning(f'{self.name} got corrupted communication from {sender}, message: {msg}')
                 self.comms[sender] = {}
 
     
@@ -158,17 +168,14 @@ class LrauvAgentController(LrauvEntityController):
 
         # fullfill comms with 0s if not recived
         state = self.get_state()
-        x_agent = state['x']
-        y_agent = state['y']
-        z_agent = state['z']
-
+        x_agent, y_agent, z_agent = state['x'], state['y'], state['z']
+        
         comms = {}
-
         for sender, c in self.comms.items():
-            # if the communication did't arrive (None) or is corrputed ({}), fullfill with 0s
+            # if the communication did't arrive (None) or is corrupted ({}), fullfill with 0s
             if c == {} or c is None:
                 comms.update({f'{sender}_dx': 0, f'{sender}_dy': 0, f'{sender}_dz': 0})
-                comms.update({f'{sender}_{name}_range':0 for name in self.others.keys() if 'landmark' in name})
+                comms.update({f'{sender}_{name}_range':0 for name in self.landmarks_names})
             else:
                 comms.update({
                     f'{sender}_dx': c['x'] - x_agent,
@@ -181,10 +188,38 @@ class LrauvAgentController(LrauvEntityController):
 
     def _reset_comms(self):
         # reset all the communication variables that are relative to the current time step
-        self.range_responses = {name:None for name in self.others.keys() if 'landmark' in name}
-        self.comms = {name:None for name in self.others.keys() if 'agent' in name}
+        self.range_responses = {name:None for name in self.landmarks_names}
+        self.comms = {name:None for name in self.agents_names}
         self.current_state = None
 
+
+    def update_tracking(self, dt:int=60):
+        state = self.get_state()
+        x_agent, y_agent, z_agent = state['x'], state['y'], state['z']
+
+        # prepare positions and ranges
+        positions = [[x_agent, y_agent, z_agent]]
+        ranges    = [[state[f'{landmark}_range']] for landmark in self.landmarks_names]
+
+        # use the positions and ranges received by communications
+        for c in self.comms.values():
+            # if the communication did't arrive (None) or is corrupted ({}), ignore
+            if c == {} or c is None:
+                continue
+            else:
+                positions.append([c['x'], c['y'], c['z']])
+                for i, landmark in enumerate(self.landmarks_names):
+                    ranges[i].append(c[f'{landmark}_range'])
+
+        # update the tracking of each landmark separately
+        preds = {}
+        for i, landmark in enumerate(self.landmarks_names):
+            pred = self.trackers[i].update_and_predict(ranges[i], positions, dt)
+            preds[f'{landmark}_tracking_x'] = pred[0]
+            preds[f'{landmark}_tracking_y'] = pred[1]
+            preds[f'{landmark}_tracking_z'] = pred[2]
+
+        return preds
 
 
 

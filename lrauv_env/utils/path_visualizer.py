@@ -13,31 +13,36 @@ from typing import List
 class LrauvPathVisualizer(Node):
 
     agent_color    = ColorRGBA(r=0.0, g=1.0, b=0.0, a=1.0) 
-    landmark_color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0)
+    landmark_color = ColorRGBA(r=0.0, g=0.0, b=1.0, a=1.0)
+    tracking_color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0)
     frame_id = 'map'
 
     def __init__(self, entities_ids:List[str]):
         super().__init__('path_visualizer')
 
         self.entities_ids = entities_ids
+        self.tracking_ids = [f'{name}_tracking' for name in self.entities_ids if 'landmark' in name]
+        self.vis_ids = self.entities_ids + self.tracking_ids
         self.subscribers = {}
         self.path_publishers = {}
         self.marker_publisher = self.create_publisher(MarkerArray, 'visualization_marker_array', 10)
 
         for name in self.entities_ids:
             self.subscribers[name] = self.create_subscription(LRAUVState, f"/{name}/state_topic", partial(self.update_callback, name=name), 10)
+        for name in self.vis_ids:
             self.path_publishers[name] = self.create_publisher(Path, f'/{name}/path', 10)
 
-        self.paths  = {name: Path(header=Header(frame_id=self.frame_id)) for name in self.entities_ids}
+        self.paths  = {name: Path(header=Header(frame_id=self.frame_id)) for name in self.vis_ids}
         self.colors = {name:(self.agent_color if 'agent' in name else self.landmark_color) for name in self.entities_ids}
-        self.updated = {name: False for name in self.entities_ids}
+        self.colors.update({name:self.tracking_color for name in self.tracking_ids}) # add tracking colors
+        self.updated = {name: False for name in self.vis_ids}
         self.legend_markers = []
 
         self.create_legend()
 
     def create_legend(self):
 
-        for i, name in enumerate(self.entities_ids):
+        for i, name in enumerate(self.vis_ids):
             color = self.colors[name]
             marker = self.create_legend_marker(name, i, color)
             self.legend_markers.append(marker)
@@ -71,6 +76,22 @@ class LrauvPathVisualizer(Node):
         self.path_publishers[name].publish(path)
         self.updated[name] = True
 
+    def manual_update(self, pos:List, name:str='agent_1'):
+        path = self.paths[name]
+        path.header.stamp = self.get_clock().now().to_msg()
+
+        # add the pose
+        pose_stamped = PoseStamped()
+        pose_stamped.header.stamp = path.header.stamp
+        pose_stamped.pose.position.x = pos[0]
+        pose_stamped.pose.position.y = pos[1]
+        pose_stamped.pose.position.z = - pos[2]
+        path.poses.append(pose_stamped)
+
+        # publish
+        self.path_publishers[name].publish(path)
+        self.updated[name] = True
+
     def create_pose_stamped(self, msg):
         pose_stamped = PoseStamped()
         pose_stamped.header.stamp = msg.header.stamp
@@ -95,7 +116,12 @@ class LrauvPathVisualizer(Node):
 
         return Quaternion(x=qx, y=qy, z=qz, w=qw)
 
-    def update(self):
+    def update(self, tracking):
+        # update manually the tracking paths
+        for name in self.tracking_ids:
+            pos = [tracking[f'{name}_x'], tracking[f'{name}_y'], tracking[f'{name}_z']]
+            self.manual_update(pos, name)
+
         while rclpy.ok():
             # Spin the node until all paths have been updated
             if all(self.updated[name] for name in self.entities_ids):
@@ -103,4 +129,4 @@ class LrauvPathVisualizer(Node):
             rclpy.spin_once(self)
 
         # re-init the paths
-        self.updated = {name: False for name in self.entities_ids}
+        self.updated = {name: False for name in self.vis_ids}

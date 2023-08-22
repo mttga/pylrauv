@@ -32,9 +32,26 @@ def check_range(obs, state):
                 (state[landmark]['x'],state[landmark]['y'],state[landmark]['z'])
             )
             recived_range = obs[agent][f'{landmark}_range']
-            print(f"Euclidean distance between {agent} and {landmark}: {real_distance}, range: {recived_range}")
+            #print(f"Euclidean distance between {agent} and {landmark}: {real_distance}, range: {recived_range}")
             if recived_range != 0:
                 errors.append(abs(real_distance - recived_range))
+    return np.mean(errors)
+
+def check_tracking(obs, state):
+    def distance(pos1, pos2):
+        return math.sqrt(sum((pos1[i] - pos2[i])**2 for i in range(len(pos1))))
+
+    agent_keys = list(obs.keys())
+    landmarks_keys = [k for k in state.keys() if 'landmark' in k]
+    errors = []
+    for agent in agent_keys:
+        for landmark in landmarks_keys:
+            pred_error = distance(
+                (obs[agent][f'{landmark}_tracking_x'],obs[agent][f'{landmark}_tracking_y']),
+                (state[landmark]['x'],state[landmark]['y'])
+            )
+            print(f"Prediction error of {agent} in respect to {landmark}: {pred_error}")
+            errors.append(pred_error)
     return np.mean(errors)
 
 def check_init_positions(state, min_distance=20, max_distance_from_agent=100):
@@ -65,8 +82,8 @@ def test_step():
 
     steps = 10
     step_time = 60
-    print_obs_state = False
-    env = LrauvEnv(n_agents=3, n_landmarks=3, render=False, prop_range_agent=(10., 10.), prop_range_landmark=(10., 10.))
+    print_obs_state = True
+    env = LrauvEnv(n_agents=3, n_landmarks=3, render=True, prop_range_agent=(10., 10.), prop_range_landmark=(10., 10.), tracking_method='pf')
     t0 = time.time()
     
     obs, state = env.reset()
@@ -85,7 +102,8 @@ def test_step():
             print(state)
         all_obs.append(obs)
         all_states.append(state)
-        check_range(obs, state)
+        #check_range(obs, state)
+        check_tracking(obs, state)
 
     time_for_completion = time.time()-t0
     print(f'Time for completing {steps} steps: {time_for_completion:.2f}s', )
@@ -101,10 +119,15 @@ def test_step():
     for o in all_obs:
         check_relative_distances(o)
 
+    # range error
     range_error = np.mean([check_range(obs, state) for obs, state in zip(all_obs, all_states)])
     print("Average range error", range_error)
     assert range_error < 10, \
         f"The average range error is to high: {range_error}"
+    
+    # tracking error
+    tracking_error = np.mean([check_tracking(obs, state) for obs, state in zip(all_obs, all_states)])
+    print("Average tracking error", tracking_error)
 
     print("Test passed")
 

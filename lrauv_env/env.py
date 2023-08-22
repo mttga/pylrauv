@@ -19,14 +19,15 @@ class LrauvEnv:
         n_agents:int,
         n_landmarks:int,
         render:bool=False,
-        agent_depth:Tuple[float, float]=(0., 0.), # defines the range of depth for spawing agents
-        landmark_depth:Tuple[float, float]=(5., 20.), # defines the range of depth for spawing landmarks
+        agent_depth:Tuple[float, float]=(0., 0.), # defines the range of depth for spawning agents
+        landmark_depth:Tuple[float, float]=(5., 20.), # defines the range of depth for spawinng landmarks
         min_distance:float=20., # min initial distance between vehicles
         max_distance:float=100., # maximum initial distance between vehicles
         landmark_action_controller:str='linear', # defines how the landmarks will move
         prop_range_agent:Tuple[float, float]=(25., 25.), # defines the speed range for agent
         prop_range_landmark:Tuple[float, float]=(0, 20.), # defines the speed range for landmark
         rudder_range_landmark:Tuple[float, float]=(0.10, 0.25), # defines the angle of movement change for landmarks
+        tracking_method:str='ls' # the method used by the agents to track the landmarks, can be ls (Least Squares) or pf (Particle Filter)
     ):
         self.n_agents      = n_agents
         self.n_landmarks   = n_landmarks
@@ -43,6 +44,7 @@ class LrauvEnv:
         self.prop_range_agent = prop_range_agent
         self.prop_range_landmark = prop_range_landmark
         self.rudder_range_landmark = rudder_range_landmark
+        self.tracking_method = tracking_method
 
         # set the landmark controller
         if landmark_action_controller=='linear':
@@ -81,7 +83,13 @@ class LrauvEnv:
         for i, name in enumerate(self.entities_ids):
             if 'agent' in name:
                 action_controller = self.landmark_controller(self.prop_range_agent)
-                self.entities[name] = LrauvAgentController(name=name, comm_adress=i+1, action_controller=action_controller, entities_names=self.entities_ids) 
+                self.entities[name] = LrauvAgentController(
+                    name=name,
+                    comm_adress=i+1,
+                    action_controller=action_controller,
+                    entities_names=self.entities_ids,
+                    method=self.tracking_method
+                ) 
             else:
                 action_controller = self.landmark_controller(self.prop_range_landmark, self.rudder_range_landmark)
                 self.entities[name] = LrauvEntityController(name=name, comm_adress=i+1, action_controller=action_controller)
@@ -107,8 +115,11 @@ class LrauvEnv:
         self.team.communicate()
         obs = self.team.get_obs()
 
+        # get the current tracking estimation
+        tracking = self.team.get_team_tracking(states, obs)
+
         if self.render:
-            self.visualizer.update()        
+            self.visualizer.update(tracking)        
 
         return obs, states
 
@@ -130,11 +141,14 @@ class LrauvEnv:
         self.team.send_range_requests(comm_time/2)
         states = {i:c.get_state() for i,c in self.entities.items()}
         self.team.communicate(comm_time/2)
-        obs = self.team.get_obs()
+        obs = self.team.get_obs(dt=step_time)
+
+        # get the current tracking estimation
+        tracking = self.team.get_team_tracking(states, obs)
 
         # spin the visualizer if render mode
         if self.render:
-            self.visualizer.update()
+            self.visualizer.update(tracking)
         return obs, states
 
     def close(self):
