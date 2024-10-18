@@ -38,9 +38,15 @@ class LrauvEntityController(Node):
             'x':msg.pos.x,
             'y':msg.pos.y,
             'z':msg.pos.z,
-            'vel_x':msg.rate_uvw.x,
-            'vel_y':msg.rate_uvw.x,
-            'vel_z':msg.rate_uvw.x,
+            'vel_x':msg.pos_dot.x,
+            'vel_y':msg.pos_dot.y,
+            'vel_z':msg.pos_dot.z,
+            'rph_x':msg.pos_rph.x,
+            'rph_y':msg.pos_rph.y,
+            'pqr_x':msg.rate_pqr.x,
+            'pqr_y':msg.rate_pqr.y,
+            'rud_ang':msg.rudder_angle,
+            'prop_vel':msg.prop_omega,
         }
 
     def get_state(self):

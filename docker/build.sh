@@ -1,0 +1,1 @@
+sudo docker build -f docker/Dockerfile . -t ros2_lrauv

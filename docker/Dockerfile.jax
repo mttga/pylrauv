@@ -1,0 +1,4 @@
+FROM ros2_lrauv
+
+ADD requirements /requirements
+RUN pip3 install -r /requirements/requirements_jax.txt

@@ -1,6 +1,13 @@
+# project
+models
+
+*.ipynb_checkpoints
+*.ipynb
+
 _*/*
 .vscode
 
+# python dafaults
  Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

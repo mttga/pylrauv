@@ -1,6 +1,6 @@
 import rclpy
 from controllers import LrauvEntityController, LrauvAgentController, LrauvTeamController
-from controllers.action import LinearController
+from controllers.action import LinearController, ConstantVelocityRudderController, ConstantVelocityDiscreteRudderController
 from launcher.launcher import RosLrauvLauncher
 from utils.spawner import LrauvSpawner
 from utils.world_controller import WorldController
@@ -23,11 +23,12 @@ class LrauvEnv:
         landmark_depth:Tuple[float, float]=(5., 20.), # defines the range of depth for spawinng landmarks
         min_distance:float=20., # min initial distance between vehicles
         max_distance:float=100., # maximum initial distance between vehicles
-        landmark_action_controller:str='linear', # defines how the landmarks will move
+        landmark_action_controller:str='linear_random', # defines how the landmarks will move
         prop_range_agent:Tuple[float, float]=(25., 25.), # defines the speed range for agent
         prop_range_landmark:Tuple[float, float]=(0, 20.), # defines the speed range for landmark
         rudder_range_landmark:Tuple[float, float]=(0.10, 0.25), # defines the angle of movement change for landmarks
-        tracking_method:str='ls' # the method used by the agents to track the landmarks, can be ls (Least Squares) or pf (Particle Filter)
+        tracking_method:str='ls', # the method used by the agents to track the landmarks, can be ls (Least Squares) or pf (Particle Filter)
+        agent_controller:str='linear_random' # defines how the agents will move
     ):
         self.n_agents      = n_agents
         self.n_landmarks   = n_landmarks
@@ -46,8 +47,18 @@ class LrauvEnv:
         self.rudder_range_landmark = rudder_range_landmark
         self.tracking_method = tracking_method
 
+        if agent_controller=='linear_random':
+            self.agent_controller = LinearController
+        elif agent_controller=='rudder':
+            self.agent_controller = ConstantVelocityRudderController
+        elif agent_controller=='rudder_discrete':
+            self.agent_controller = ConstantVelocityDiscreteRudderController
+        else:
+            raise NotImplementedError(f"Agent controller {agent_controller} not implemented.")
+
+
         # set the landmark controller
-        if landmark_action_controller=='linear':
+        if landmark_action_controller=='linear_random':
             self.landmark_controller = LinearController
         else:
             raise NotImplementedError(f"Action controller {landmark_action_controller} not implemented")
@@ -82,7 +93,7 @@ class LrauvEnv:
         self.entities = {}
         for i, name in enumerate(self.entities_ids):
             if 'agent' in name:
-                action_controller = self.landmark_controller(self.prop_range_agent)
+                action_controller = self.agent_controller(self.prop_range_agent)
                 self.entities[name] = LrauvAgentController(
                     name=name,
                     comm_adress=i+1,
@@ -132,7 +143,11 @@ class LrauvEnv:
         
         # send actions
         for e in self.entities.values():
-            e.send_action(actions)
+            if actions is None or e.name not in actions:
+                action = None # None action will sample with the default controller
+            else:
+                action = actions[e.name]
+            e.send_action(action)
 
         # step the world but leave a final room for sending the communciactions between robots
         self.world_controller.step_world(step_time-comm_time)

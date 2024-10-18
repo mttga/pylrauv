@@ -1,0 +1,1 @@
+docker build -f docker/Dockerfile.jax . -t ros2_lrauv_jax
