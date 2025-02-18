@@ -11,6 +11,8 @@ import math
 from safetensors.flax import save_file, load_file
 from flax.traverse_util import flatten_dict, unflatten_dict
 
+from .jax_modules import PPOActorRNN, PPOActorTransformer, PQNRnn
+
 
 def save_params(params: Dict, filename: Union[str, os.PathLike]) -> None:
     flattened_dict = flatten_dict(params, sep=",")
@@ -21,71 +23,18 @@ def load_params(filename: Union[str, os.PathLike]) -> Dict:
     flattened_dict = load_file(filename)
     return unflatten_dict(flattened_dict, sep=",")
 
-
-# PPO Classes
-class ScannedRNN(nn.Module):
-    @functools.partial(
-        nn.scan,
-        variable_broadcast="params",
-        in_axes=0,
-        out_axes=0,
-        split_rngs={"params": False},
-    )
-    @nn.compact
-    def __call__(self, carry, x):
-        """Applies the module."""
-        rnn_state = carry
-        ins, resets = x
-        rnn_state = jnp.where(
-            resets[:, np.newaxis],
-            self.initialize_carry(ins.shape[0], ins.shape[1]),
-            rnn_state,
-        )
-        new_rnn_state, y = nn.GRUCell(features=ins.shape[1])(rnn_state, ins)
-        return new_rnn_state, y
-
-    @staticmethod
-    def initialize_carry(batch_size, hidden_size):
-        # Use a dummy key since the default state init fn is just zeros.
-        cell = nn.GRUCell(features=hidden_size)
-        return cell.initialize_carry(jax.random.PRNGKey(0), (batch_size, hidden_size))
-
-
-class ActorRNN(nn.Module):
-    action_dim: Sequence[int]
-    hidden_size: int
-
-    @nn.compact
-    def __call__(self, hidden, x):
-        obs, dones, avail_actions = x
-        embedding = nn.Dense(
-            self.hidden_size,
-            kernel_init=orthogonal(np.sqrt(2)),
-            bias_init=constant(0.0),
-        )(obs)
-        embedding = nn.relu(embedding)
-
-        rnn_in = (embedding, dones)
-        hidden, embedding = ScannedRNN()(hidden, rnn_in)
-
-        actor_mean = nn.Dense(
-            self.hidden_size, kernel_init=orthogonal(2), bias_init=constant(0.0)
-        )(embedding)
-        actor_mean = nn.relu(actor_mean)
-        actor_mean = nn.Dense(
-            self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
-        )(actor_mean)
-        unavail_actions = 1 - avail_actions
-        action_logits = actor_mean - (unavail_actions * 1e10)
-
-        pi = distrax.Categorical(logits=action_logits)
-
-        return hidden, pi
-
-
 def batchify(x: dict, agent_list, num_actors):
     x = jnp.stack([x[a] for a in agent_list])
     return x.reshape((num_actors, -1))
+
+
+def batchify_transformer(x: dict, agent_list, num_actors):
+    # bathify specifically for transformer keeping the last two dimensions (entities, features)
+    x = jnp.stack([x[a] for a in agent_list])
+    num_entities = x.shape[-2]
+    num_feats = x.shape[-1]
+    x = x.reshape((num_actors, num_entities, num_feats))
+    return x
 
 
 def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
@@ -105,21 +54,42 @@ class CentralizedActorRNN:
         hidden_dim=128,
         num_envs=1,
         pos_norm=1e-3,
+        matrix_obs=False,
+        add_agent_id=False,
+        mask_ranges=False,
+        agent_class=True,
+        **agent_kwargs,
     ):
+        
         self.agent_params = agent_params
+        if 'params' not in self.agent_params:
+            self.agent_params = {'params': self.agent_params}
         self.agent_list = agent_list
         self.landmark_list = landmark_list
         self.num_agents = len(agent_list)
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
         self.pos_norm = pos_norm
+        self.matrix_obs = matrix_obs
         self.num_envs = num_envs
         self.rng = jax.random.PRNGKey(seed)
+        self.add_agent_id = add_agent_id
+        self.ranges_mask = 0.0 if mask_ranges else 1.0
 
-        self.actor = ActorRNN(action_dim=self.action_dim, hidden_size=hidden_dim)
+        if agent_class == 'ppo_rnn':
+            agent_class = PPOActorRNN
+        elif agent_class == 'pqn_rnn':
+            agent_class = PQNRnn
+        elif agent_class == 'ppo_transformer':
+            agent_class = PPOActorTransformer
+        else:
+            raise ValueError(f"Invalid agent class: {agent_class}")
+        
+        self.actor = agent_class(action_dim, hidden_dim, **agent_kwargs)
+
 
     def reset(self, seed=None):
-        self.hidden = ScannedRNN.initialize_carry(self.num_agents, self.hidden_dim)
+        self.hidden = jnp.zeros((self.num_agents, self.hidden_dim))
         if seed is not None:
             self.rng = jax.random.PRNGKey(seed)
         self.rng, key = jax.random.split(self.rng)
@@ -127,74 +97,103 @@ class CentralizedActorRNN:
     def step(self, obs, done, avail_actions=None):
 
         if avail_actions is None:
-            # TODO: available actions should be given by the environment
             avail_actions = jnp.ones((self.num_agents, self.action_dim), dtype=bool)
+        else:
+            avail_actions = {k: jnp.array(v) for k, v in avail_actions.items()}
+            avail_actions = batchify(avail_actions, self.agent_list, self.num_agents)
 
         # assumes a single boolean done signal
         dones = jnp.full((self.num_agents,), done, dtype=bool)
 
         self.rng, key = jax.random.split(self.rng)
-        obs = {agent: self.preprocess_obs(o) for agent, o in obs.items()}
-        obs = batchify(obs, self.agent_list, self.num_agents)
+        obs = {agent: self.preprocess_obs(agent, o) for agent, o in obs.items()}
+
+        if self.matrix_obs:
+            obs = batchify_transformer(obs, self.agent_list, self.num_agents)
+        else:
+            obs = batchify(obs, self.agent_list, self.num_agents)
 
         ac_in = (
             obs[np.newaxis, ...],
             dones[np.newaxis, ...],
             avail_actions,
         )
-        self.hidden, pi = self.actor.apply(self.agent_params, self.hidden, ac_in)
 
-        action = pi.sample(seed=key)
+        self.hidden, logits = jax.jit(self.actor.apply)(self.agent_params, self.hidden, ac_in)
+        action = jnp.argmax(logits, axis=-1)
+
         action = unbatchify(action, self.agent_list, self.num_envs, self.num_agents)
         action = {k: int(v.squeeze()) for k, v in action.items()}
 
         return action
 
-    def preprocess_obs(self, obs):
-        """
-        transforms the observation from the gazebo environment to the format of the jax simplified env
-        """
+    def preprocess_obs(self, agent_name, obs):
 
-        new_obs = [
-            obs["x"] * self.pos_norm,
-            obs["y"] * self.pos_norm,
-            obs["z"] * self.pos_norm,
-            obs["rph_x"]
-            * self.pos_norm,  # angle, could be also np.arctan(obs['vel_x'], obs['vel_y']),
-            1,  # is agent
-            1,  # is self
-        ]  # self
+        # Pre-calculate sizes
+        obs_size = 6
+        total_obs_size = (len(self.agent_list)  + len(self.landmark_list)) * obs_size
 
-        # other agents
-        for agent in self.agent_list[:-1]:
-            new_obs.extend(
-                [
+        if self.add_agent_id:
+            total_obs_size += len(self.agent_list)
+
+        # Preallocate observation array
+        obs_array = jnp.zeros(total_obs_size)
+
+        # Index for filling the array
+        idx = 0
+
+        # Add other agents' observations
+        for agent in self.agent_list:
+            if agent == agent_name:
+                # Add self observation
+                obs_array = obs_array.at[idx:idx + obs_size].set([
+                    obs["x"] * self.pos_norm,
+                    obs["y"] * self.pos_norm,
+                    obs["z"] * self.pos_norm,
+                    obs["rph_z"] * self.pos_norm,
+                    1,  # is agent
+                    1   # is self
+                ])
+                idx += obs_size
+            
+            else:
+                obs_array = obs_array.at[idx:idx + obs_size].set([
                     obs[f"{agent}_dx"] * self.pos_norm,
                     obs[f"{agent}_dy"] * self.pos_norm,
                     obs[f"{agent}_dz"] * self.pos_norm,
                     math.sqrt(
-                        obs[f"{agent}_dx"] ** 2
-                        + obs[f"{agent}_dy"] ** 2
-                        + obs[f"{agent}_dz"]
-                    )
-                    * self.pos_norm,
+                        obs[f"{agent}_dx"] ** 2 +
+                        obs[f"{agent}_dy"] ** 2 +
+                        obs[f"{agent}_dz"] ** 2
+                    ) * self.pos_norm*self.ranges_mask,
                     1,  # is agent
-                    0,  # is self
-                ]
-            )
+                    0   # is self
+                ])
+                idx += obs_size
 
-        # landmarks
+        # Add landmarks' observations
         for landmark in self.landmark_list:
-            new_obs.extend(
-                [
-                    (obs[f"{landmark}_tracking_x"] - obs["x"])
-                    * self.pos_norm,  # prediction relative to agent
-                    (obs[f"{landmark}_tracking_y"] - obs["y"]) * self.pos_norm,
-                    (obs[f"{landmark}_tracking_z"] - obs["z"]) * self.pos_norm,
-                    (obs[f"{landmark}_range"]) * self.pos_norm,
-                    0,  # is agent
-                    0,  # is self
-                ]
-            )
+            obs_array = obs_array.at[idx:idx + obs_size].set([
+                (obs["x"] - obs[f"{landmark}_tracking_x"]) * self.pos_norm,
+                (obs["y"] - obs[f"{landmark}_tracking_y"]) * self.pos_norm,
+                (obs["z"] - obs[f"{landmark}_tracking_z"]) * self.pos_norm,
+                obs[f"{landmark}_range"] * self.pos_norm*self.ranges_mask,
+                0,  # is agent
+                0   # is self
+            ])
+            idx += obs_size
 
-        return jnp.array(new_obs)
+        # Add agent id
+        if self.add_agent_id:
+            obs_array = obs_array.at[idx:idx + len(self.agent_list)].set(
+                [1 if agent == agent_name else 0 for agent in self.agent_list]
+            )
+        
+        if self.matrix_obs:
+            obs_array = obs_array.reshape((len(self.agent_list) + len(self.landmark_list), obs_size))
+
+        # Check for NaN values
+        if jnp.isnan(obs_array).any():
+            raise ValueError(f"NaN in the observation of agent {agent_name}")
+
+        return obs_array

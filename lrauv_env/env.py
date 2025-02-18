@@ -23,12 +23,15 @@ class LrauvEnv:
         landmark_depth:Tuple[float, float]=(5., 20.), # defines the range of depth for spawinng landmarks
         min_distance:float=20., # min initial distance between vehicles
         max_distance:float=100., # maximum initial distance between vehicles
-        landmark_action_controller:str='linear_random', # defines how the landmarks will move
+        landmark_controller:str='linear_random', # defines how the landmarks will move
         prop_range_agent:Tuple[float, float]=(25., 25.), # defines the speed range for agent
-        prop_range_landmark:Tuple[float, float]=(0, 20.), # defines the speed range for landmark
+        prop_range_landmark:Tuple[float, float]=(0, 10.), # defines the speed range for landmark
         rudder_range_landmark:Tuple[float, float]=(0.10, 0.25), # defines the angle of movement change for landmarks
+        dirchange_time_range_landmark:Tuple[int, int]=(2, 5), # defines the time range for changing the direction of the landmarks
         tracking_method:str='ls', # the method used by the agents to track the landmarks, can be ls (Least Squares) or pf (Particle Filter)
-        agent_controller:str='linear_random' # defines how the agents will move
+        agent_controller:str='rudder_discrete', # defines how the agents will move
+        depth_known:bool=True, # if the depth of the landmarks is known
+        **tracking_args, # arguments for the tracking method
     ):
         self.n_agents      = n_agents
         self.n_landmarks   = n_landmarks
@@ -46,6 +49,8 @@ class LrauvEnv:
         self.prop_range_landmark = prop_range_landmark
         self.rudder_range_landmark = rudder_range_landmark
         self.tracking_method = tracking_method
+        self.depth_known = depth_known
+        self.tracking_args = tracking_args
 
         if agent_controller=='linear_random':
             self.agent_controller = LinearController
@@ -56,12 +61,17 @@ class LrauvEnv:
         else:
             raise NotImplementedError(f"Agent controller {agent_controller} not implemented.")
 
-
         # set the landmark controller
-        if landmark_action_controller=='linear_random':
+        self.landmark_controller_kwargs = {'rudder_angle_range': rudder_range_landmark}
+        if landmark_controller=='linear_random':
             self.landmark_controller = LinearController
+            self.landmark_controller_kwargs['dirchange_time_range'] = dirchange_time_range_landmark
+        elif landmark_controller=='rudder':
+            self.landmark_controller = ConstantVelocityRudderController
+        elif landmark_controller=='rudder_discrete':
+            self.landmark_controller = ConstantVelocityDiscreteRudderController
         else:
-            raise NotImplementedError(f"Action controller {landmark_action_controller} not implemented")
+            raise NotImplementedError(f"Landmark controller {landmark_controller} not implemented")
 
     def start(self):
 
@@ -84,8 +94,12 @@ class LrauvEnv:
             min_distance=self.min_distance,
             max_distance=self.max_distance
         )
+        landmarks_depth = []
         for name in self.entities_ids:
-            self.spawner.spawn(name=name)
+            lat, lon, z, heading = self.spawner.spawn(name=name)
+            if 'landmark' in name:
+                landmarks_depth.append(z)
+        
         self.nodes.append(self.spawner) # take trace of all the nodes
         self.spawner.check_all_spawned(self.entities_ids) # this only checks that exists at least one gazebo topic for each entity
 
@@ -99,10 +113,12 @@ class LrauvEnv:
                     comm_adress=i+1,
                     action_controller=action_controller,
                     entities_names=self.entities_ids,
-                    method=self.tracking_method
+                    method=self.tracking_method,
+                    landmarks_depth=landmarks_depth if self.depth_known else None,
+                    **self.tracking_args
                 ) 
             else:
-                action_controller = self.landmark_controller(self.prop_range_landmark, self.rudder_range_landmark)
+                action_controller = self.landmark_controller(self.prop_range_landmark, **self.landmark_controller_kwargs)
                 self.entities[name] = LrauvEntityController(name=name, comm_adress=i+1, action_controller=action_controller)
             self.nodes.append(self.entities[name])
         self.agents    = {name:self.entities[name] for name in self.agents_ids}
@@ -139,7 +155,7 @@ class LrauvEnv:
             self.close()
         return self.start()
     
-    def step(self, actions=None, step_time:int=60, comm_time:int=2):
+    def step(self, actions=None, step_time:int=30, comm_time:int=2):
         
         # send actions
         for e in self.entities.values():
@@ -165,6 +181,9 @@ class LrauvEnv:
         if self.render:
             self.visualizer.update(tracking)
         return obs, states
+    
+    def get_available_actions(self):
+        return {name:c.action_controller.get_available_actions() for name, c in self.agents.items()}
 
     def close(self):
         for node in self.nodes:

@@ -20,15 +20,19 @@ class LrauvAgentController(LrauvEntityController):
         comm_adress:int=1,
         action_controller:Union[LinearController,None]=None,
         entities_names:List[str]=['agent_1','landmark_1'],
+        landmarks_depth:Union[List[float],None]=None, # the depth of the landmarks is assumed to be known
         **tracker_args
     ):
 
         super().__init__(name, comm_adress, action_controller)
 
         # agents in respect of normal entities (landmarks) can comunicate (send and recieve range bearing requests/responses)
+        self.name = name
         self.comm_adress = comm_adress
         self.agents_names    = [n for n in entities_names if 'agent' in n]
+        self.other_agents_names = [n for n in self.agents_names if n!=self.name]
         self.landmarks_names = [n for n in entities_names if 'landmark' in n]
+        self.landmarks_depth = landmarks_depth if landmarks_depth is not None else [None for _ in self.landmarks_names]
         self.others  = {name:i+1 for i, name in enumerate(entities_names) if name!=self.name} # agent_1:1, landmark_1:3 etc.
         self.others_adr  = {i+1:name for i, name in enumerate(entities_names) if name!=self.name}
 
@@ -178,9 +182,9 @@ class LrauvAgentController(LrauvEntityController):
                 comms.update({f'{sender}_{name}_range':0 for name in self.landmarks_names})
             else:
                 comms.update({
-                    f'{sender}_dx': c['x'] - x_agent,
-                    f'{sender}_dy': c['y'] - y_agent,
-                    f'{sender}_dz': c['z'] - z_agent
+                    f'{sender}_dx': x_agent - c['x'],
+                    f'{sender}_dy': y_agent - c['y'],
+                    f'{sender}_dz': z_agent - c['z']
                 })
                 comms.update({f'{sender}_{k}':v for k, v in c.items() if 'range' in k}) # add the ranges
             
@@ -189,7 +193,7 @@ class LrauvAgentController(LrauvEntityController):
     def _reset_comms(self):
         # reset all the communication variables that are relative to the current time step
         self.range_responses = {name:None for name in self.landmarks_names}
-        self.comms = {name:None for name in self.agents_names}
+        self.comms = {name:None for name in self.other_agents_names}
         self.current_state = None
 
 
@@ -214,7 +218,12 @@ class LrauvAgentController(LrauvEntityController):
         # update the tracking of each landmark separately
         preds = {}
         for i, landmark in enumerate(self.landmarks_names):
-            pred = self.trackers[i].update_and_predict(ranges[i], positions, dt)
+            pred = self.trackers[i].update_and_predict(
+                ranges=ranges[i],
+                positions=positions,
+                depth=self.landmarks_depth[i],
+                dt=dt
+            )
             preds[f'{landmark}_tracking_x'] = pred[0]
             preds[f'{landmark}_tracking_y'] = pred[1]
             preds[f'{landmark}_tracking_z'] = pred[2]

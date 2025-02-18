@@ -1,3 +1,5 @@
+pandas
+matplotlib
 jax
 jaxlib
 flax==0.7.2

@@ -55,6 +55,8 @@ class LrauvSpawner(Node):
 
         self.entities_spawned += 1
 
+        return lat, lon, z, heading
+
     def check_all_spawned(self, ids:List[str]):
         # check if all the ids in a list of ids are present in the output of 'gz topic -l'
         gz_topic_output = subprocess.check_output(['gz', 'topic', '-l']).decode('utf-8')

@@ -1,6 +1,8 @@
 # project
 models
+outputs
 
+*.png
 *.ipynb_checkpoints
 *.ipynb
 

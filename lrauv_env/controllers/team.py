@@ -30,7 +30,7 @@ class LrauvTeamController:
         self.world_controller.step_world(step_time=comm_time)
         self.range_request_sent = False
 
-    def get_obs(self, dt=60):
+    def get_obs(self, dt=30):
         return {name:agent.get_obs(dt=dt) for name, agent in self.agents.items()}
 
     def get_team_tracking(self, state, obs):

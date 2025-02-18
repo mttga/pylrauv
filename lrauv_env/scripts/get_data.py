@@ -13,12 +13,12 @@ from env import LrauvEnv
 
 def main():
 
-    steps = 200
+    steps = 300
     print_obs_state = True
 
-    N = 5 # number of samples per combination
-    thrusters = [5., 10., 20., 25.]
-    step_times = [20, 30, 60]
+    N = 10 # number of samples per combination
+    thrusters = list(range(1, 16))
+    step_times = [30]
 
     t0 = time.time()
 

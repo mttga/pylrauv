@@ -87,3 +87,5 @@ RUN echo "source ~/gz_ws/install/setup.sh" >> /home/developer/.bashrc && \
 
 # STEP 3: additional python packages
 RUN python3 -m pip install -U pyproj
+ADD requirements /requirements
+RUN pip3 install -r /requirements/requirements_jax.txt
