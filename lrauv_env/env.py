@@ -7,11 +7,6 @@ from utils.world_controller import WorldController
 from utils.path_visualizer import LrauvPathVisualizer
 from typing import Tuple
 
-# TODO:
-# implement a proper ACT method
-# implement linear, static and linear with change of direction movement
-# enable parallelization of environments
-
 class LrauvEnv:
 
     def __init__(
@@ -24,10 +19,10 @@ class LrauvEnv:
         min_distance:float=20., # min initial distance between vehicles
         max_distance:float=100., # maximum initial distance between vehicles
         landmark_controller:str='linear_random', # defines how the landmarks will move
-        prop_range_agent:Tuple[float, float]=(25., 25.), # defines the speed range for agent
+        prop_range_agent:Tuple[float, float]=(30., 30.), # defines the speed range for agent
         prop_range_landmark:Tuple[float, float]=(0, 10.), # defines the speed range for landmark
-        rudder_range_landmark:Tuple[float, float]=(0.10, 0.25), # defines the angle of movement change for landmarks
-        dirchange_time_range_landmark:Tuple[int, int]=(2, 5), # defines the time range for changing the direction of the landmarks
+        rudder_range_landmark:Tuple[float, float]=(0.10, 0.24), # defines the angle of movement change for landmarks
+        dirchange_time_range_landmark:Tuple[int, int]=(2, 10), # defines the time range for changing the direction of the landmarks
         tracking_method:str='ls', # the method used by the agents to track the landmarks, can be ls (Least Squares) or pf (Particle Filter)
         agent_controller:str='rudder_discrete', # defines how the agents will move
         depth_known:bool=True, # if the depth of the landmarks is known
@@ -146,7 +141,13 @@ class LrauvEnv:
         tracking = self.team.get_team_tracking(states, obs)
 
         if self.render:
-            self.visualizer.update(tracking)        
+            self.visualizer.update(tracking)     
+
+        # update the states with the tracking information
+        for l in self.landmarks_ids:
+            states[l]['tracking_x'] = tracking[f'{l}_tracking_x']
+            states[l]['tracking_y'] = tracking[f'{l}_tracking_y']
+            states[l]['tracking_z'] = tracking[f'{l}_tracking_z']   
 
         return obs, states
 
@@ -180,6 +181,13 @@ class LrauvEnv:
         # spin the visualizer if render mode
         if self.render:
             self.visualizer.update(tracking)
+
+        # update the states with the tracking information
+        for l in self.landmarks_ids:
+            states[l]['tracking_x'] = tracking[f'{l}_tracking_x']
+            states[l]['tracking_y'] = tracking[f'{l}_tracking_y']
+            states[l]['tracking_z'] = tracking[f'{l}_tracking_z']
+        
         return obs, states
     
     def get_available_actions(self):
