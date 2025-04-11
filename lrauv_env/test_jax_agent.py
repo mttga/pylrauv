@@ -22,15 +22,15 @@ def test_episode(
     print_state=False,
     render=True,
     model_path=None,
+    difficulty="hard",
 ):
     env = LrauvEnv(
         n_agents=num_agents,
         n_landmarks=num_landmarks,
         render=render,
         prop_range_agent=(30.0, 30.0),
-        prop_range_landmark=(0.0, 10.0),
-        dirchange_time_range_landmark=(2, 10),
-        max_distance=200,
+        difficulty=difficulty,
+        max_distance=150,
         tracking_method="pf",
         agent_controller="rudder_discrete",
         landmark_controller="linear_random",
@@ -62,12 +62,12 @@ def test_episode(
             agent_list=env.agents_ids,
             landmark_list=env.landmarks_ids,
             action_dim=5,
-            hidden_dim=128,
+            hidden_dim=256,
             pos_norm=1e-3,
             agent_class="ppo_rnn",
             mask_ranges=True,
             add_agent_id=False,
-            num_layers=2,
+            num_layers=4,
         )
     else:
         agent = CentralizedActorRNN(
@@ -158,7 +158,7 @@ def main():
         "--mode",
         type=str,
         choices=["collect", "test"],
-        default="test",
+        default="collect",
         help="Mode to run the script: collect or test.",
     )
     parser.add_argument(
@@ -176,11 +176,11 @@ def main():
     parser.add_argument(
         "--episodes",
         type=int,
-        default=50,
+        default=100,
         help="Number of episodes to collect or test.",
     )
     parser.add_argument(
-        "--steps", type=int, default=128, help="Number of steps per episode."
+        "--steps", type=int, default=1000, help="Number of steps per episode."
     )
     parser.add_argument(
         "--step_time", type=int, default=30, help="Time per step in seconds."
@@ -189,10 +189,19 @@ def main():
     parser.add_argument(
         "--num_landmarks", type=int, default=2, help="Number of Landmarks"
     )
-    parser.add_argument("--id", type=int, default=1, help="Id of the process.")
+    parser.add_argument(
+        "--difficulty",
+        type=str,
+        default="hard",
+        choices=["easy", "medium", "hard", "expert"],
+        help="Difficulty level of the environment.",
+    )
+    parser.add_argument("--id", type=int, default=5, help="Id of the process.")
 
     args = parser.parse_args()
 
+    args.model_path = "models/FINAL/mappo_transformer_from_5v5follow_256steps_utracking_5_vs_5_step7320_rng202567368.safetensors"
+    args.output_path = "outputs/post_3v3_hard"
 
     if args.mode == "collect":
         collect(
@@ -204,12 +213,19 @@ def main():
             step_time=args.step_time,
             num_agents=args.num_agents,
             num_landmarks=args.num_landmarks,
+            difficulty=args.difficulty,
         )
         
     elif args.mode == "test":
         for i in range(args.episodes):
             test_episode(
-                steps=args.steps, step_time=args.step_time, model_path=args.model_path, num_agents=args.num_agents, num_landmarks=args.num_landmarks,
+                steps=args.steps,
+                step_time=args.step_time,
+                model_path=args.model_path,
+                num_agents=args.num_agents,
+                num_landmarks=args.num_landmarks,
+                difficulty=args.difficulty,
+                render=True,
             )
 
 

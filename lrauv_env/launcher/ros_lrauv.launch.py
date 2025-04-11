@@ -11,6 +11,11 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 from launch_ros.actions import Node
 
+
+"""
+RVIZ Dynamic Configuration
+"""
+
 # helper function to create the rviz configuration dynamically
 rviz_config_template = """
 Panels:
@@ -244,29 +249,129 @@ def modify_rviz_config(n_agents, n_landmarks):
 
     return path
 
+"""
+Gazebo Dyanmic Configuration
+"""
+def generate_plot3d_config(n_agents, n_landmarks):
+    agent_colors = [
+        (0, 255, 0),    # Green
+        (50, 205, 50),   # LimeGreen
+        (34, 139, 34)    # ForestGreen
+    ]
+    landmark_colors = [
+        (0, 128, 255),   # Blue
+        (255, 90, 90)    # Red
+    ]
+
+    plot_config = ""
+    
+    # Add agents
+    for i in range(1, n_agents + 1):
+        r, g, b = agent_colors[(i-1) % len(agent_colors)]
+        plot_config += f'''
+        <plugin filename="Plot3D" name="Plot Agent {i}">
+            <gz-gui>
+                <title>Plot Agent {i}</title>
+                <property type="string" key="state">docked_collapsed</property>
+            </gz-gui>
+            <entity_name>agent_{i}</entity_name>
+            <color>{r} {g} {b}</color>
+            <maximum_points>10000</maximum_points>
+            <minimum_distance>0.5</minimum_distance>
+        </plugin>
+        '''
+    
+    # Add landmarks (tracking and true paths)
+    for i in range(1, n_landmarks + 1):
+        # True path (blue)
+        r, g, b = landmark_colors[0]
+        plot_config += f'''
+        <plugin filename="Plot3D" name="Plot Landmark {i}">
+            <gz-gui>
+                <title>Plot Landmark {i}</title>
+                <property type="string" key="state">docked_collapsed</property>
+            </gz-gui>
+            <entity_name>landmark_{i}</entity_name>
+            <color>{r} {g} {b}</color>
+            <maximum_points>10000</maximum_points>
+            <minimum_distance>0.5</minimum_distance>
+        </plugin>
+        '''
+    
+    return plot_config
+
+
+def generate_camera_config(n_landmarks):
+    camera_config = ""
+    for i in range(1, n_landmarks + 1):
+        camera_config += f'''
+        <plugin filename="CameraTracking" name="Follow Landmark {i}">
+            <gz-gui>
+                <title>Landmark {i} Camera</title>
+                <property type="string" key="state">docked_collapsed</property>
+            </gz-gui>
+            <follow_target>landmark_{i}</follow_target>
+            <follow_offset>1000 1000 1000</follow_offset>
+            <follow_pgain>0.05</follow_pgain>
+        </plugin>
+        '''
+    return camera_config
+
+def modify_sdf_world(n_agents, n_landmarks, original_sdf_path):
+    # Read original SDF content
+    with open(original_sdf_path, 'r') as f:
+        sdf_content = f.read()
+    
+    # Generate Plot3D plugin configurations
+    plot_config = generate_plot3d_config(n_agents, n_landmarks)
+    camera_config = generate_camera_config(n_landmarks)
+
+    sdf_content = sdf_content.replace("<plot3dplaceholder></plot3dplaceholder>", plot_config)
+    #sdf_content = sdf_content.replace("<cameraplaceholder></cameraplaceholder>", camera_config)
+
+    print(sdf_content)
+    
+    # Write to a temporary file
+    temp_sdf_path = '/tmp/modified_empty_environment.sdf'
+    with open(temp_sdf_path, 'w') as f:
+        f.write(sdf_content)
+    
+    return temp_sdf_path
+
 def launch_setup(context, *args, **kwargs):
 
     world_name = 'empty_environment'
     nodes = []
     server_mode = bool(int(launch.substitutions.LaunchConfiguration('server_mode').perform(context)))
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    gz_args = os.path.join(current_dir, 'worlds', world_name+'.sdf')
+    
+    """Gazebo Configuration"""
+    # Path to original SDF
+    original_sdf_path = os.path.join(current_dir, 'worlds', f'{world_name}.sdf')
+    
+    # Get number of agents/landmarks
+    n_agents = int(launch.substitutions.LaunchConfiguration('n_agents').perform(context))
+    n_landmarks = int(launch.substitutions.LaunchConfiguration('n_landmarks').perform(context))
+    
+    # Generate modified SDF with Plot3D plugins
+    modified_sdf_path = modify_sdf_world(n_agents, n_landmarks, original_sdf_path)
+    
+    # Use the modified SDF
+    gz_args = modified_sdf_path
     if server_mode:
         gz_args = '-s ' + gz_args
+    
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
-
     gz_sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')),
-        launch_arguments={
-            'gz_args': gz_args
-        }.items(),
+        launch_arguments={'gz_args': gz_args}.items(),
     )
     nodes.append(gz_sim)
 
+
+    """ROS Configuration"""
     # Bridge topic
-    n_agents = launch.substitutions.LaunchConfiguration('n_agents').perform(context)
-    n_landmarks = launch.substitutions.LaunchConfiguration('n_landmarks').perform(context)
     arguments = [
         # agents STATE, Gazebo -> Ros
         f'/agent_{i}/state_topic@lrauv_msgs/msg/LRAUVState[lrauv_gazebo_plugins.msgs.LRAUVState'

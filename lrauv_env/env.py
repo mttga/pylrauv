@@ -1,3 +1,13 @@
+"""
+LRAUV Environment for Underwater Tracking.
+
+Mainly used for testing RL agents in LRAUV gazebo simulator. 
+
+TODO:
+- reward function
+- info dictionary
+"""
+
 import rclpy
 from controllers import LrauvEntityController, LrauvAgentController, LrauvTeamController
 from controllers.action import LinearController, ConstantVelocityRudderController, ConstantVelocityDiscreteRudderController
@@ -20,14 +30,38 @@ class LrauvEnv:
         max_distance:float=100., # maximum initial distance between vehicles
         landmark_controller:str='linear_random', # defines how the landmarks will move
         prop_range_agent:Tuple[float, float]=(30., 30.), # defines the speed range for agent
-        prop_range_landmark:Tuple[float, float]=(0, 10.), # defines the speed range for landmark
+        landmark_rel_speed:Tuple[float, float]=(0., 0.5), # defines the speed range for landmark relative to agent
         rudder_range_landmark:Tuple[float, float]=(0.10, 0.24), # defines the angle of movement change for landmarks
         dirchange_time_range_landmark:Tuple[int, int]=(2, 10), # defines the time range for changing the direction of the landmarks
         tracking_method:str='ls', # the method used by the agents to track the landmarks, can be ls (Least Squares) or pf (Particle Filter)
+        difficulty: str='medium', # the difficulty of the task, can be easy, medium, hard orexpert
         agent_controller:str='rudder_discrete', # defines how the agents will move
         depth_known:bool=True, # if the depth of the landmarks is known
         **tracking_args, # arguments for the tracking method
     ):
+
+        assert difficulty in [
+            "manual",
+            "easy",
+            "medium",
+            "hard",
+            "expert",
+        ], "difficulty must be manual, easy, medium, hard or expert"
+
+        if difficulty != 'manual':
+            if difficulty == 'easy':
+                landmark_rel_speed = (0., 0.35)
+                dirchange_time_range_landmark=(5, 15)
+            elif difficulty == 'medium':
+                landmark_rel_speed = (0.15, 0.5)
+                dirchange_time_range_landmark=(2, 10)
+            elif difficulty == 'hard':
+                landmark_rel_speed = (0.5, 0.7)
+                dirchange_time_range_landmark=(5, 15)
+            elif difficulty == 'expert':
+                landmark_rel_speed = (0.83, 0.86)
+                dirchange_time_range_landmark=(5, 15)
+
         self.n_agents      = n_agents
         self.n_landmarks   = n_landmarks
         self.agents_ids    = [f'agent_{i}' for i in range(1, n_agents+1)]
@@ -35,6 +69,12 @@ class LrauvEnv:
         self.entities_ids  = self.agents_ids + self.landmarks_ids
         self.render = render
         self.started = False
+
+        # set the propulsor ranges for the landmark in relation to the agent
+        prop_range_landmark = (
+            landmark_rel_speed[0] * prop_range_agent[0],
+            landmark_rel_speed[1] * prop_range_agent[1]
+        )
 
         self.agent_depth = agent_depth
         self.landmark_depth = landmark_depth

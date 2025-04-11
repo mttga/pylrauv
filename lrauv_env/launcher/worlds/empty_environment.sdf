@@ -182,6 +182,7 @@
           <property key="state" type="string">floating</property>
           <property key="showTitleBar" type="bool">false</property>
         </gz-gui>
+        
       </plugin>
       <plugin filename="MarkerManager" name="Marker manager">
         <gz-gui>
@@ -262,16 +263,7 @@
         <real_time_factor>true</real_time_factor>
         <iterations>true</iterations>
       </plugin>
-      <plugin filename="Plot3D" name="Plot 3D">
-        <gz-gui>
-          <title>Plot Tethys 3D path</title>
-          <property type="string" key="state">docked_collapsed</property>
-        </gz-gui>
-        <entity_name>tethys</entity_name>
-        <color>0 0 1</color>
-        <maximum_points>10000</maximum_points>
-        <minimum_distance>0.5</minimum_distance>
-      </plugin>
+      <plot3dplaceholder></plot3dplaceholder>
       <plugin filename="ComponentInspector" name="Component Inspector">
         <gz-gui>
           <title>Inspector</title>
@@ -289,29 +281,6 @@
           <title>Camera controls</title>
           <property type="string" key="state">docked_collapsed</property>
         </gz-gui>
-      </plugin>
-      <plugin filename="GridConfig" name="Grid config">
-        <gz-gui>
-          <property type="string" key="state">docked_collapsed</property>
-        </gz-gui>
-        <insert>
-          <!-- 300 km x 300 km -->
-          <cell_count>6</cell_count>
-          <vertical_cell_count>0</vertical_cell_count>
-          <!-- 50 km -->
-          <cell_length>50000</cell_length>
-          <pose>0 100000 0  0 0 0.32</pose>
-          <color>0 1 0 1</color>
-        </insert>
-        <insert>
-          <!-- 0.1 km x 0.1 km -->
-          <cell_count>100</cell_count>
-          <vertical_cell_count>0</vertical_cell_count>
-          <!-- 1 m -->
-          <cell_length>1</cell_length>
-          <pose>0 0 0  0 0 0</pose>
-          <color>0.5 0.5 0.5 1</color>
-        </insert>
       </plugin>
       <plugin filename="ControlPanelPlugin" name="Tethys Controls">
         <gz-gui>

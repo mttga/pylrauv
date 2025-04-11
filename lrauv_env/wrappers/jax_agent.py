@@ -87,6 +87,8 @@ class CentralizedActorRNN:
         
         self.actor = agent_class(action_dim, hidden_dim, **agent_kwargs)
 
+        self.jitted_actor_apply = jax.jit(self.actor.apply)
+
 
     def reset(self, seed=None):
         self.hidden = jnp.zeros((self.num_agents, self.hidden_dim))
@@ -119,7 +121,7 @@ class CentralizedActorRNN:
             avail_actions,
         )
 
-        self.hidden, logits = jax.jit(self.actor.apply)(self.agent_params, self.hidden, ac_in)
+        self.hidden, logits = self.jitted_actor_apply(self.agent_params, self.hidden, ac_in)
         action = jnp.argmax(logits, axis=-1)
 
         action = unbatchify(action, self.agent_list, self.num_envs, self.num_agents)

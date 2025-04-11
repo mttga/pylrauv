@@ -58,7 +58,7 @@ class LrauvPathVisualizer(Node):
         marker.type = Marker.TEXT_VIEW_FACING
         marker.action = Marker.ADD
         marker.pose.position.x = 1.0
-        marker.pose.position.y = -0.5 * idx
+        marker.pose.position.y = 0.5 * idx
         marker.pose.position.z = 0.0
         marker.pose.orientation.w = 1.0
         marker.scale.z = 0.5
@@ -83,7 +83,7 @@ class LrauvPathVisualizer(Node):
         # add the pose
         pose_stamped = PoseStamped()
         pose_stamped.header.stamp = path.header.stamp
-        pose_stamped.pose.position.x = pos[0]
+        pose_stamped.pose.position.x = -pos[0]
         pose_stamped.pose.position.y = pos[1]
         pose_stamped.pose.position.z = - pos[2]
         path.poses.append(pose_stamped)
@@ -97,7 +97,7 @@ class LrauvPathVisualizer(Node):
         pose_stamped.header.stamp = msg.header.stamp
         pose_stamped.header.frame_id = self.frame_id
 
-        pose_stamped.pose.position.x = msg.pos.x
+        pose_stamped.pose.position.x = -msg.pos.x
         pose_stamped.pose.position.y = msg.pos.y
         pose_stamped.pose.position.z = - msg.pos.z
 
