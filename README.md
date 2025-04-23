@@ -39,7 +39,7 @@ env = LrauvEnv(
 
 ## Testing Agents from JaxMARL
 
-We recommend using the accelerated distillation version of PyLRAUV provided by [JaxMarl](https://github.com/FLAIROx/JaxMARL/tree/utracking/jaxmarl/environments) (make sure atm you're using the ```utracking``` branch). To test agents trained in JaxMARL, use the following script:
+We recommend using the accelerated distillation version of PyLRAUV provided by [JaxMarl](https://github.com/FLAIROx/JaxMARL/tree/utracking/jaxmarl/environments/utracking) (make sure atm you're using the ```utracking``` branch). To test agents trained in JaxMARL, use the following script:
 
 ```bash
 python3 lrauv_env/test_jax_agent.py \
